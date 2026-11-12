@@ -6,6 +6,12 @@ Pilot area: Vhembe District, Limpopo. Origin: UNIVEN x CSIR 2026 CyberSecureTech
 
 > This version has **no household features**: no household registration, household login, household reports or household SMS. Alerts come from sensors, SCADA and Eskom operators; councillors verify.
 
+## Live services
+
+- API (Render): https://transguard-api-kf4l.onrender.com/api/v1/health
+- Web (Vercel): project `transguard`, deploys from `main`, root `apps/web`
+- Database (Supabase): project `transguard`, region eu-central-1
+
 ## Stack
 
 | Part | Where | Folder |
