@@ -2,13 +2,14 @@
 import { useEffect, useState } from 'react';
 import { supabase, Profile, ROLE_LABEL, Role } from '@/lib/supabase';
 import { post } from '@/lib/api';
+import { BillingAdmin } from './Billing';
 
 type Ward = { id: string; municipality: string; name: string };
 type Village = { id: number; name: string; ward_id: string };
 type Transformer = { id: string; name: string | null; village_id: number; lat: number; lng: number; capacity_kva: number | null };
 type Staff = { id: string; role: Role; display_name: string; staff_number: string | null; ward_id: string | null; status: string };
 
-const TABS = ['Areas and transformers', 'Staff accounts'] as const;
+const TABS = ['Areas and transformers', 'Staff accounts', 'Billing'] as const;
 
 export default function AdminDashboard({ profile }: { profile: Profile }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>('Areas and transformers');
@@ -32,7 +33,7 @@ export default function AdminDashboard({ profile }: { profile: Profile }) {
   return (
     <>
       <div className="tabs" role="tablist">
-        {TABS.map((t) => (<button key={t} role="tab" className="tab" aria-selected={tab === t} onClick={() => setTab(t)}>{t}</button>))}
+        {TABS.filter((t) => t !== 'Billing' || isSys).map((t) => (<button key={t} role="tab" className="tab" aria-selected={tab === t} onClick={() => setTab(t)}>{t}</button>))}
       </div>
       {msg.ok && <div className="ok">{msg.ok}</div>}
       {msg.err && <div className="error">{msg.err}</div>}
@@ -63,6 +64,8 @@ export default function AdminDashboard({ profile }: { profile: Profile }) {
           </div>
         </div>
       )}
+
+      {tab === 'Billing' && isSys && <BillingAdmin />}
 
       {tab === 'Staff accounts' && (
         <div className="grid c2" style={{ alignItems: 'start' }}>

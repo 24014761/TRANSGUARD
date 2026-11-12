@@ -197,6 +197,49 @@ v1.post('/ingest/scada', ingestLimiter, wrap(async (req, res) => {
   res.json({ incident_id: id, filtered: id === null });
 }));
 
+// ---------- Billing: monthly invoices to Eskom ----------
+v1.get('/billing/invoices', requireUser, allow('system_admin', 'eskom_operator'), wrap(async (req, res) => {
+  const { data, error } = await req.db.from('invoices').select('*').order('period_start', { ascending: false }).limit(120);
+  if (error) throw error;
+  res.json(data);
+}));
+
+v1.get('/billing/invoices/:id', requireUser, allow('system_admin', 'eskom_operator'), wrap(async (req, res) => {
+  const [{ data: invoice, error }, { data: settings }] = await Promise.all([
+    req.db.from('invoices').select('*').eq('id', uuid.parse(req.params.id)).maybeSingle(),
+    req.db.from('billing_settings').select('*').eq('id', 1).maybeSingle(),
+  ]);
+  if (error) throw error;
+  if (!invoice) throw fail(404, 'Invoice not found');
+  res.json({ invoice, settings });
+}));
+
+v1.post('/billing/invoices', requireUser, allow('system_admin'), wrap(async (req, res) => {
+  const b = z.object({
+    month: z.string().regex(/^\d{4}-\d{2}$/, 'month must be YYYY-MM'),
+    uptime_pct: z.number().min(0).max(100).default(100),
+  }).parse(req.body);
+  const id = await rpc(req.db, 'generate_invoice', { p_month: `${b.month}-01`, p_uptime: b.uptime_pct });
+  res.status(201).json({ id });
+}));
+
+v1.post('/billing/invoices/:id/issue', requireUser, allow('system_admin'), wrap(async (req, res) => {
+  await rpc(req.db, 'issue_invoice', { p_invoice: uuid.parse(req.params.id) });
+  res.json({ ok: true });
+}));
+
+v1.post('/billing/invoices/:id/paid', requireUser, allow('system_admin'), wrap(async (req, res) => {
+  const b = z.object({ reference: z.string().min(2).max(100) }).parse(req.body);
+  await rpc(req.db, 'mark_invoice_paid', { p_invoice: uuid.parse(req.params.id), p_reference: b.reference });
+  res.json({ ok: true });
+}));
+
+v1.post('/billing/invoices/:id/void', requireUser, allow('system_admin'), wrap(async (req, res) => {
+  const b = z.object({ reason: z.string().min(2).max(300) }).parse(req.body);
+  await rpc(req.db, 'void_invoice', { p_invoice: uuid.parse(req.params.id), p_reason: b.reason });
+  res.json({ ok: true });
+}));
+
 // System admin: create staff accounts (needs SUPABASE_SERVICE_ROLE_KEY on the server)
 v1.post('/admin/users', requireUser, allow('system_admin'), wrap(async (req, res) => {
   if (!admin) throw fail(501, 'Set SUPABASE_SERVICE_ROLE_KEY on the API to create accounts');

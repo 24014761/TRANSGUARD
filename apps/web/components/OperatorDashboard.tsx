@@ -6,6 +6,7 @@ import { post, api, downloadCsv, ago } from '@/lib/api';
 import { useIncidents } from './hooks';
 import IncidentCard, { TYPE_LABEL } from './IncidentCard';
 import type { MapPoint } from './MapView';
+import { InvoiceList } from './Billing';
 
 const MapView = dynamic(() => import('./MapView'), { ssr: false, loading: () => <div className="map" /> });
 
@@ -14,7 +15,7 @@ type Transformer = { id: string; name: string | null; lat: number; lng: number; 
 type Device = { id: string; transformer_id: string; status: string; last_heartbeat: string | null; battery_pct: number | null; firmware: string | null; last_seq: number };
 type Reading = { device_id: string; ts: string; current_a: number | null; voltage_v: number | null; vibration_g: number | null; temp_c: number | null; box_open: boolean | null; motion: boolean | null; cable_cut: boolean | null };
 
-const TABS = ['Overview', 'Alerts and map', 'Sensors', 'Load-shedding', 'Security and records'] as const;
+const TABS = ['Overview', 'Alerts and map', 'Sensors', 'Load-shedding', 'Security and records', 'Invoices'] as const;
 
 export default function OperatorDashboard({ profile }: { profile: Profile }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>('Overview');
@@ -121,6 +122,7 @@ export default function OperatorDashboard({ profile }: { profile: Profile }) {
       {tab === 'Sensors' && <Sensors transformers={transformers} />}
       {tab === 'Load-shedding' && <LoadShedding canEdit={profile.role === 'eskom_operator' || profile.role === 'system_admin'} />}
       {tab === 'Security and records' && <Records />}
+      {tab === 'Invoices' && <InvoiceList />}
     </>
   );
 }

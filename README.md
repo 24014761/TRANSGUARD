@@ -49,6 +49,13 @@ The state machine lives in Postgres functions (`db/migrations/002_workflow.sql`)
 - `pg_cron` runs every minute: unanswered verifications are sent as **unverified**, and devices silent for 3 minutes raise **SENSOR_SILENT**.
 - Every action is written to `audit_log`, which is append-only (a trigger blocks update and delete).
 
+## Billing (Eskom pays monthly)
+
+- Plans: **pilot** (flat monthly fee up to a transformer limit, extra transformers at the municipal price), **municipal** and **provincial** (price per active transformer). Prices, VAT, payment terms, SLA and bank details are edited by the system admin under Administration > Billing.
+- An **active transformer** is one whose sensor sent at least one reading in the month.
+- Flow: create draft > issue (sets the due date) > mark paid with the EFT reference, or void. A daily job marks unpaid invoices overdue. Eskom operators see issued invoices under Invoices and can print them (`/invoice?id=...`).
+- If platform uptime for the month is below the SLA target, a service credit is deducted before VAT.
+
 ## Security
 
 - Supabase Auth (email + password) for staff. Roles live in `profiles` and are set from `app_metadata`, which users cannot edit.
@@ -73,6 +80,9 @@ The state machine lives in Postgres functions (`db/migrations/002_workflow.sql`)
 | `GET /reports/kpis`, `/reports/incidents.csv` | Operator, admins |
 | `POST /ingest/device` | Sensor (`x-device-key`) |
 | `POST /ingest/scada` | SCADA (`x-api-key`) |
+| `GET /billing/invoices`, `GET /billing/invoices/:id` | System admin, operator |
+| `POST /billing/invoices` `{ month: "YYYY-MM", uptime_pct }` | System admin (creates a draft) |
+| `POST /billing/invoices/:id/issue`, `/paid` `{ reference }`, `/void` `{ reason }` | System admin |
 | `POST /admin/users` | System admin (needs `SUPABASE_SERVICE_ROLE_KEY`) |
 
 Send `Authorization: Bearer <supabase access token>` for signed-in routes.
@@ -98,7 +108,7 @@ API_URL=http://localhost:4000 DEVICE_KEY=<device key> node scripts/simulate.js D
 
 ## Database setup (new Supabase project)
 
-Run in order in the SQL editor: `db/migrations/001_schema.sql`, `002_workflow.sql`, `003_tighten_helpers.sql`, then `db/seed/seed_demo.sql` (replace the placeholder keys first). Create staff users from the admin dashboard or the Supabase dashboard with `app_metadata` like `{"tg_role":"councillor","display_name":"...","ward_id":"THULAMELA-W25"}`.
+Run in order in the SQL editor: `db/migrations/001_schema.sql`, `002_workflow.sql`, `003_tighten_helpers.sql`, `004_billing.sql`, then `db/seed/seed_demo.sql` (replace the placeholder keys first). Create staff users from the admin dashboard or the Supabase dashboard with `app_metadata` like `{"tg_role":"councillor","display_name":"...","ward_id":"THULAMELA-W25"}`.
 
 ## Not yet built (from the spec)
 

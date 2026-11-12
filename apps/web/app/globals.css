@@ -106,3 +106,13 @@ input, select, textarea { width: 100%; padding: .6rem .7rem; border: 1px solid #
 footer { padding: 2rem 0; color: var(--muted); font-size: .85rem; border-top: 1px solid var(--line); margin-top: 2rem; }
 details summary { cursor: pointer; font-weight: 600; }
 details { padding: .7rem 0; border-bottom: 1px solid var(--line); }
+
+/* Invoice page */
+.invoice-page { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+.invoice-sheet { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 2rem; }
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
+  .invoice-page { margin: 0; max-width: none; }
+  .invoice-sheet { border: 0; padding: 0; }
+}
