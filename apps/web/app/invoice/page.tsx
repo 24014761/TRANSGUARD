@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { Invoice, BillingSettings, rand, monthLabel, StatusBadge } from '@/components/Billing';
+import { CATEGORY_LABEL, Category } from '@/components/InvoiceWriter';
 
 function InvoiceView() {
   const id = useSearchParams().get('id') || '';
@@ -37,7 +38,9 @@ function InvoiceView() {
           <div style={{ textAlign: 'right' }}>
             <h1 style={{ fontSize: '1.8rem' }}>{i.status === 'draft' ? 'DRAFT INVOICE' : 'TAX INVOICE'}</h1>
             <div><strong>{i.number}</strong></div>
-            <div className="muted">Period: {monthLabel(i.period_start)} ({i.period_start} to {i.period_end})</div>
+            {i.kind === 'manual'
+              ? <div className="muted">Date: {i.period_start}</div>
+              : <div className="muted">Period: {monthLabel(i.period_start)} ({i.period_start} to {i.period_end})</div>}
             {i.issued_at && <div className="muted">Issued: {i.issued_at.slice(0, 10)}</div>}
             {i.due_at && <div className="muted">Due: {i.due_at}</div>}
             <div style={{ marginTop: '.4rem' }}><StatusBadge s={i.status} /></div>
@@ -46,28 +49,37 @@ function InvoiceView() {
 
         <div className="card" style={{ margin: '1.5rem 0' }}>
           <div className="muted" style={{ fontSize: '.8rem', textTransform: 'uppercase', letterSpacing: '.4px' }}>Bill to</div>
-          <strong>{s.customer_name}</strong>
+          <strong>{i.customer_name || s.customer_name}</strong>
           <div className="muted" style={{ whiteSpace: 'pre-line' }}>{s.customer_details}</div>
         </div>
 
+        {i.title && <h2 style={{ fontSize: '1.2rem', marginBottom: '.75rem' }}>{i.title}</h2>}
         <table>
           <thead><tr><th>Description</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Unit price</th><th style={{ textAlign: 'right' }}>Amount</th></tr></thead>
           <tbody>
             {i.lines.map((l, n) => (
-              <tr key={n}><td>{l.description}</td><td style={{ textAlign: 'right' }}>{l.quantity}</td><td style={{ textAlign: 'right' }}>{rand(l.unit_price)}</td><td style={{ textAlign: 'right' }}>{rand(l.amount)}</td></tr>
+              <tr key={n}><td>{l.description}{(l.category || l.vat_applies === false) && <div className="muted" style={{ fontSize: '.8rem' }}>{l.category ? CATEGORY_LABEL[l.category as Category] : ''}{l.vat_applies === false ? ' . no VAT' : ''}</div>}</td><td style={{ textAlign: 'right' }}>{l.quantity}{l.unit && l.unit !== 'each' ? ` ${l.unit}` : ''}</td><td style={{ textAlign: 'right' }}>{rand(l.unit_price)}</td><td style={{ textAlign: 'right' }}>{rand(l.amount)}</td></tr>
             ))}
             <tr><td colSpan={3} style={{ textAlign: 'right' }}>Subtotal</td><td style={{ textAlign: 'right' }}>{rand(i.subtotal)}</td></tr>
+            {Number(i.discount) > 0 && (
+              <tr><td colSpan={3} style={{ textAlign: 'right' }}>Discount</td><td style={{ textAlign: 'right' }}>- {rand(i.discount)}</td></tr>
+            )}
             {Number(i.sla_credit) > 0 && (
               <tr><td colSpan={3} style={{ textAlign: 'right' }}>SLA credit (uptime {i.sla_uptime_pct}% below {s.sla_target_pct}% target)</td><td style={{ textAlign: 'right' }}>- {rand(i.sla_credit)}</td></tr>
             )}
-            <tr><td colSpan={3} style={{ textAlign: 'right' }}>VAT ({vatPct}%)</td><td style={{ textAlign: 'right' }}>{rand(i.vat)}</td></tr>
+            <tr><td colSpan={3} style={{ textAlign: 'right' }}>VAT ({vatPct}%{i.kind === 'manual' ? ' on taxable lines' : ''})</td><td style={{ textAlign: 'right' }}>{rand(i.vat)}</td></tr>
             <tr><td colSpan={3} style={{ textAlign: 'right' }}><strong>Total due</strong></td><td style={{ textAlign: 'right' }}><strong>{rand(i.total)}</strong></td></tr>
           </tbody>
         </table>
 
-        <p className="muted" style={{ marginTop: '1rem' }}>
-          {i.active_transformers} transformer{i.active_transformers === 1 ? '' : 's'} monitored this month (sensor reported at least once).
-        </p>
+        {i.kind === 'subscription' ? (
+          <p className="muted" style={{ marginTop: '1rem' }}>
+            {i.active_transformers} transformer{i.active_transformers === 1 ? '' : 's'} monitored this month (sensor reported at least once).
+          </p>
+        ) : Number(i.loss_total) > 0 ? (
+          <p className="muted" style={{ marginTop: '1rem' }}>Value of stolen or lost items on this invoice: {rand(i.loss_total)}.</p>
+        ) : null}
+        {i.notes && <div style={{ marginTop: '1rem' }}><strong>Notes</strong><p style={{ whiteSpace: 'pre-line', margin: '.25rem 0' }}>{i.notes}</p></div>}
 
         <div className="card" style={{ marginTop: '1.5rem' }}>
           <h3>How to pay</h3>

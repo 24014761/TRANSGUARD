@@ -223,6 +223,31 @@ v1.post('/billing/invoices', requireUser, allow('system_admin'), wrap(async (req
   res.status(201).json({ id });
 }));
 
+// Manual invoice: your own line items (stolen items, repairs, call-outs), optionally linked to an incident
+v1.post('/billing/manual-invoices', requireUser, allow('system_admin'), wrap(async (req, res) => {
+  const line = z.object({
+    description: z.string().trim().min(1).max(200),
+    category: z.enum(['subscription', 'hardware', 'service', 'stolen_item', 'repair', 'other']),
+    unit: z.string().max(30).default('each'),
+    quantity: z.number().positive().max(1_000_000),
+    unit_price: z.number().min(0).max(100_000_000),
+    vat_applies: z.boolean().default(true),
+  });
+  const b = z.object({
+    title: z.string().trim().min(2).max(150),
+    incident_id: z.string().uuid().nullable().optional(),
+    customer_name: z.string().max(150).optional(),
+    discount: z.number().min(0).default(0),
+    notes: z.string().max(1000).optional(),
+    lines: z.array(line).min(1).max(50),
+  }).parse(req.body);
+  const id = await rpc(req.db, 'create_manual_invoice', {
+    p_title: b.title, p_lines: b.lines, p_incident: b.incident_id ?? null,
+    p_discount: b.discount, p_notes: b.notes ?? null, p_customer: b.customer_name ?? null,
+  });
+  res.status(201).json({ id });
+}));
+
 v1.post('/billing/invoices/:id/issue', requireUser, allow('system_admin'), wrap(async (req, res) => {
   await rpc(req.db, 'issue_invoice', { p_invoice: uuid.parse(req.params.id) });
   res.json({ ok: true });

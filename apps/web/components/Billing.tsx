@@ -3,10 +3,14 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { api, post } from '@/lib/api';
+import InvoiceWriter, { PriceList } from './InvoiceWriter';
 
 export type Invoice = {
   id: string; number: string; period_start: string; period_end: string; plan: string;
-  active_transformers: number; lines: { description: string; quantity: number; unit_price: number; amount: number }[];
+  active_transformers: number;
+  lines: { description: string; quantity: number; unit_price: number; amount: number; unit?: string; category?: string; vat_applies?: boolean }[];
+  kind: 'subscription' | 'manual'; title: string | null; incident_id: string | null; customer_name: string | null;
+  discount: number; loss_total: number;
   subtotal: number; sla_uptime_pct: number; sla_credit: number; vat: number; total: number;
   status: 'draft' | 'issued' | 'paid' | 'overdue' | 'void';
   issued_at: string | null; due_at: string | null; paid_at: string | null; payment_reference: string | null; notes: string | null;
@@ -21,6 +25,8 @@ export type BillingSettings = {
 
 export const rand = (n: number | string) =>
   'R ' + Number(n).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+export const invoiceLabel = (i: Invoice) => (i.kind === 'manual' ? i.title || 'Invoice' : monthLabel(i.period_start));
 
 export const monthLabel = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' });
 
@@ -63,11 +69,11 @@ export function InvoiceList() {
       {err && <div className="error">{err}</div>}
       <Summary items={visible} />
       <div className="table-wrap"><table>
-        <thead><tr><th>Invoice</th><th>Month</th><th>Active transformers</th><th>Total (incl. VAT)</th><th>Due</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Invoice</th><th>For</th><th>Active transformers</th><th>Total (incl. VAT)</th><th>Due</th><th>Status</th><th></th></tr></thead>
         <tbody>
           {visible.map((i) => (
             <tr key={i.id}>
-              <td>{i.number}</td><td>{monthLabel(i.period_start)}</td><td>{i.active_transformers}</td>
+              <td>{i.number}</td><td>{invoiceLabel(i)}</td><td>{i.kind === 'manual' ? '-' : i.active_transformers}</td>
               <td>{rand(i.total)}</td><td>{i.due_at || '-'}</td><td><StatusBadge s={i.status} /></td>
               <td><Link className="btn light sm" href={`/invoice?id=${i.id}`} target="_blank">View / print</Link></td>
             </tr>
@@ -88,6 +94,7 @@ export function BillingAdmin() {
   const now = new Date();
   const [month, setMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
   const [uptime, setUptime] = useState('100');
+  const [view, setView] = useState<'write' | 'monthly' | 'prices'>('write');
 
   useEffect(() => {
     supabase.from('billing_settings').select('*').eq('id', 1).maybeSingle().then(({ data }) => setS(data as BillingSettings));
@@ -120,7 +127,16 @@ export function BillingAdmin() {
       {(msg.err || err) && <div className="error" role="alert">{msg.err || err}</div>}
       <Summary items={items} />
 
-      <div className="grid c2" style={{ alignItems: 'start' }}>
+      <div className="row">
+        <button className={`btn sm ${view === 'write' ? '' : 'light'}`} onClick={() => setView('write')}>Write an invoice</button>
+        <button className={`btn sm ${view === 'monthly' ? '' : 'light'}`} onClick={() => setView('monthly')}>Monthly subscription</button>
+        <button className={`btn sm ${view === 'prices' ? '' : 'light'}`} onClick={() => setView('prices')}>Price list</button>
+      </div>
+
+      {view === 'write' && <InvoiceWriter settings={s} onCreated={(m) => { setMsg(m); if (m.ok) reload(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />}
+      {view === 'prices' && <PriceList onMsg={setMsg} />}
+
+      {view === 'monthly' && <div className="grid c2" style={{ alignItems: 'start' }}>
         <form className="card" onSubmit={(e) => { e.preventDefault(); run(() => post('/billing/invoices', { month, uptime_pct: Number(uptime) }), 'Draft invoice created. Check it, then issue it.'); }}>
           <h3>Create this month&apos;s invoice</h3>
           <p className="muted">Counts every transformer whose sensor reported at least once in the month, applies the plan price, any SLA credit, and VAT.</p>
@@ -164,15 +180,17 @@ export function BillingAdmin() {
             <button className="btn">Save settings</button>
           </form>
         )}
-      </div>
+      </div>}
+
+      <h3 style={{ marginTop: '1rem' }}>All invoices</h3>
 
       <div className="table-wrap"><table>
-        <thead><tr><th>Invoice</th><th>Month</th><th>Plan</th><th>Active</th><th>Total (incl. VAT)</th><th>Due</th><th>Status</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Invoice</th><th>For</th><th>Type</th><th>Active</th><th>Total (incl. VAT)</th><th>Due</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>
           {items.map((i) => (
             <tr key={i.id}>
-              <td>{i.number}</td><td>{monthLabel(i.period_start)}</td><td>{i.plan}</td><td>{i.active_transformers}</td>
-              <td>{rand(i.total)}{Number(i.sla_credit) > 0 && <div className="muted">SLA credit {rand(i.sla_credit)}</div>}</td>
+              <td>{i.number}</td><td>{invoiceLabel(i)}</td><td>{i.kind === 'manual' ? 'Written' : `Monthly (${i.plan})`}</td><td>{i.kind === 'manual' ? '-' : i.active_transformers}</td>
+              <td>{rand(i.total)}{Number(i.loss_total) > 0 && <div className="muted">Stolen items {rand(i.loss_total)}</div>}{Number(i.sla_credit) > 0 && <div className="muted">SLA credit {rand(i.sla_credit)}</div>}</td>
               <td>{i.due_at || '-'}</td>
               <td><StatusBadge s={i.status} />{i.payment_reference && <div className="muted">Ref {i.payment_reference}</div>}</td>
               <td><div className="row">
