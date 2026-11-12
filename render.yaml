@@ -17,3 +17,5 @@ services:
         sync: false
       - key: VERIFY_DEADLINE_MINUTES
         value: "10"
+      - key: NODE_VERSION
+        value: "22"
