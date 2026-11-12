@@ -41,7 +41,7 @@ app.use(
   cors({
     origin(origin, cb) {
       if (!origin) return cb(null, true);
-      if (allowList.includes(origin) || /^https:\/\/transguard[a-z0-9-]*\.vercel\.app$/.test(origin) || /^http:\/\/localhost:\d+$/.test(origin)) {
+      if (allowList.includes(origin) || /^https:\/\/transguard[a-z0-9-]*\.vercel\.app$/.test(origin) || /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
         return cb(null, true);
       }
       return cb(new Error('Origin not allowed'));
